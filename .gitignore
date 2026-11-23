@@ -5,6 +5,7 @@
 .venv/
 venv/
 env/
+.python-version
 
 # Python bytecode and test artifacts
 __pycache__/
@@ -13,8 +14,11 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+coverage.xml
 .tox/
 .nox/
+.hypothesis/
+.cache/
 
 # Streamlit and runtime data
 .streamlit/
@@ -24,8 +28,11 @@ relayit.db-*
 *.sqlite3
 *.sqlite3-journal
 *.db-journal
+*.bak
 logs/
 *.log
+pip-audit-report.*
+bandit-report.*
 
 # Notebook output
 .ipynb_checkpoints/
@@ -40,6 +47,7 @@ Desktop.ini
 .idea/
 *.swp
 *.swo
+*.code-workspace
 
 # Packaging and build output
 build/
@@ -47,3 +55,4 @@ dist/
 *.egg-info/
 .mypy_cache/
 .ruff_cache/
+security-reports/

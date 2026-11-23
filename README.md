@@ -41,7 +41,8 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 cp .env.example .env
 python -m relayit.auth
-# Add the generated hash to RELAYIT_AUTH_USERS_JSON in .env.
+# Enter a strong password when prompted, then add the generated hash
+# to RELAYIT_AUTH_USERS_JSON in .env.
 python -m unittest discover -s relayit/tests -p "test_*.py" -v
 python -m streamlit run app.py --server.headless true --server.address 127.0.0.1 --server.port 8501
 ```
@@ -66,7 +67,8 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 Copy-Item .env.example .env
 python -m relayit.auth
-# Add the generated hash to RELAYIT_AUTH_USERS_JSON in .env.
+# Enter a strong password when prompted, then add the generated hash
+# to RELAYIT_AUTH_USERS_JSON in .env.
 python -m unittest discover -s relayit/tests -p "test_*.py" -v
 python -m streamlit run app.py --server.headless true --server.address 127.0.0.1 --server.port 8501
 ```
@@ -89,6 +91,7 @@ RELAYIT_CONFIDENCE_THRESHOLD=0.62
 RELAYIT_MODEL_PROVIDER=deterministic
 OPENAI_API_KEY=
 OPENAI_CHAT_MODEL=gpt-4o-mini
+RELAYIT_AUTH_USERS_JSON=
 ```
 
 | Variable | Purpose | Default |
@@ -98,7 +101,7 @@ OPENAI_CHAT_MODEL=gpt-4o-mini
 | `RELAYIT_MODEL_PROVIDER` | Agent execution mode | `deterministic` |
 | `OPENAI_API_KEY` | Optional hosted model credential | Empty |
 | `OPENAI_CHAT_MODEL` | Optional hosted model name | `gpt-4o-mini` |
-| `RELAYIT_AUTH_USERS_JSON` | PBKDF2 password hashes and roles | Required |
+| `RELAYIT_AUTH_USERS_JSON` | JSON map of usernames to PBKDF2 password hashes and roles | Required |
 
 Do not commit `.env` or a populated API key. The repository's `.gitignore` excludes
 runtime databases and secret environment files.
@@ -119,8 +122,15 @@ each user:
 RELAYIT_AUTH_USERS_JSON={"reviewer":{"password_hash":"<generated-hash>","role":"reviewer"},"analyst":{"password_hash":"<generated-hash>","role":"analyst"}}
 ```
 
+Generate one hash per password. Do not enter the literal password in
+`RELAYIT_AUTH_USERS_JSON`; only the hash belongs in the environment file.
+
 Roles are enforced server-side. `admin` and `reviewer` can send human
 escalation replies; `analyst` can inspect tickets and run workflows.
+
+Keep all authenticated demo traffic on loopback unless it is placed behind an
+authenticated HTTPS reverse proxy. Do not expose Streamlit's websocket directly
+to the internet.
 
 ## Run and demo
 
@@ -165,6 +175,9 @@ Remove-Item relayit.db -ErrorAction SilentlyContinue
 python -m streamlit run app.py
 ```
 
+Resetting the database deletes demonstration tickets, customer records,
+conversations, execution traces, and escalation history.
+
 ## Tests
 
 Run the complete unit test suite:
@@ -174,6 +187,17 @@ python -m unittest discover -s relayit/tests -p "test_*.py" -v
 ```
 
 Tests use temporary SQLite databases and do not modify `relayit.db`.
+
+For the dependency and static security tools:
+
+```bash
+python -m pip install pip-audit bandit
+pip-audit -r requirements.txt
+bandit -q -r app.py relayit
+```
+
+Bandit and `pip-audit` findings must be reviewed; a clean tool run does not
+replace application security testing.
 
 ## Project structure
 
@@ -186,10 +210,13 @@ relayit/
   orchestration/        support workflow
   tools/                billing, account, and retrieval tools
   tests/                workflow and tool unit tests
+  auth.py               PBKDF2 password and role helpers
 docs/                   architecture documentation
 notebooks/              demo notebook and script
 .env.example            safe environment template
 AGENTS.md               instructions for coding agents
+SECURITY.md             security deployment and reporting guide
+SECURITY-REVIEW.md      security audit findings and remediation status
 ```
 
 ## Troubleshooting
