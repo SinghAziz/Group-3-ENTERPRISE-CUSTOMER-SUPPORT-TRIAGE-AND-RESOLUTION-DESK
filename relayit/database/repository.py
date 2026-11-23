@@ -126,6 +126,8 @@ class Repository:
 
     def add_human_review(self, ticket_id: int, note: str, decision: str, status: str, customer_reply: str) -> None:
         customer_reply = customer_reply.strip()
+        if not customer_reply:
+            raise ValueError("A customer-facing reply is required.")
         with connect(self.path) as db:
             db.execute("UPDATE escalations SET internal_note=?,human_decision=?,resolved_at=CURRENT_TIMESTAMP WHERE ticket_id=?",
                        (note, decision, ticket_id))
@@ -133,6 +135,15 @@ class Repository:
                 "UPDATE tickets SET status=?,resolution=?,customer_response=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
                 (status, decision or "Reviewed by a human support representative", customer_reply, ticket_id),
             )
+            conversation = db.execute(
+                "SELECT id FROM conversations WHERE ticket_id=? ORDER BY id DESC LIMIT 1",
+                (ticket_id,),
+            ).fetchone()
+            if conversation:
+                db.execute(
+                    "INSERT INTO messages(conversation_id,role,content) VALUES (?,?,?)",
+                    (conversation["id"], "assistant", customer_reply),
+                )
             db.execute(
                 "INSERT INTO audit_logs(ticket_id,agent_name,action,result) VALUES (?,?,?,?)",
                 (ticket_id, "Human Support", "Customer reply", customer_reply),

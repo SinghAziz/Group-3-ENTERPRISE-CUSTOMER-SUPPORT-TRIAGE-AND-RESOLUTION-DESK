@@ -59,6 +59,9 @@ class WorkflowTests(unittest.TestCase):
         ticket = self.repository.ticket(result.ticket_id)
         self.assertEqual(ticket["status"], "Awaiting Customer Information")
         self.assertEqual(ticket["customer_response"], reply)
+        customer_id = self.repository.customer("Test Customer", "other@example.com")
+        history = self.repository.history(customer_id)
+        self.assertTrue(any(message["role"] == "assistant" and reply in message["content"] for message in history))
 
 
 if __name__ == "__main__":

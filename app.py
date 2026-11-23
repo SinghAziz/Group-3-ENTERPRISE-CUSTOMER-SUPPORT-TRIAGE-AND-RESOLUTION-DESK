@@ -104,6 +104,9 @@ def ticket_details(ticket_id: int) -> None:
     if not ticket:
         st.error("Ticket not found.")
         return
+    saved_reply = st.session_state.pop("human_reply_saved", None)
+    if saved_reply == ticket_id:
+        st.success("Customer reply sent and saved.")
     st.header(f"Ticket #{ticket_id} · {ticket['subject']}")
     columns = st.columns(4)
     for column, (label, value) in zip(columns, [("Status", ticket["status"]), ("Category", ticket["category"] or "—"),
@@ -292,6 +295,9 @@ def escalations() -> None:
                         st.error("Enter a customer-facing reply before saving.")
                         st.stop()
                     repo.add_human_review(item["ticket_id"], note, decision, new_status, reply)
+                    st.session_state["human_reply_saved"] = item["ticket_id"]
+                    st.session_state["selected_ticket"] = item["ticket_id"]
+                    st.session_state["page"] = "Ticket Details"
                     st.rerun()
 
 
