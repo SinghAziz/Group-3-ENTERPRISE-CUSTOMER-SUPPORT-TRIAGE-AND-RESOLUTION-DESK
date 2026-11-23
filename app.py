@@ -7,6 +7,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from relayit.auth import AuthenticationError, User, authenticate, configured_users
 from relayit.core.framework import framework_status
 from relayit.database.repository import Repository
 from relayit.models.schemas import TicketInput
@@ -85,8 +86,38 @@ h1 { font-size:2.1rem; margin-bottom:.25rem; }
 repo = Repository()
 
 
+def current_user() -> User:
+    return st.session_state["authenticated_user"]
+
+
+def login_gate() -> None:
+    if "authenticated_user" in st.session_state:
+        return
+    st.title("Sign in to RelayIt")
+    st.caption("Authorized support staff only. Your role controls review and reply permissions.")
+    if not configured_users():
+        st.error("No RelayIt users are configured.")
+        st.code("python -m relayit.auth", language="bash")
+        st.info("Generate a password hash, then add RELAYIT_AUTH_USERS_JSON to .env. See README for the format.")
+        st.stop()
+    with st.form("login"):
+        username = st.text_input("Username", autocomplete="username")
+        password = st.text_input("Password", type="password", autocomplete="current-password")
+        submitted = st.form_submit_button("Sign in", type="primary", width="stretch")
+    if submitted:
+        try:
+            st.session_state["authenticated_user"] = authenticate(username.strip(), password)
+            st.rerun()
+        except AuthenticationError as exc:
+            st.error(str(exc))
+    st.stop()
+
+
+login_gate()
+
+
 def metric(label: str, value: str) -> None:
-    st.markdown(f'<div class="metric-card"><small>{label}</small><h2>{value}</h2></div>', unsafe_allow_html=True)
+    st.metric(label, value)
 
 
 def status_html(status: str) -> str:
@@ -100,7 +131,7 @@ def status_html(status: str) -> str:
 
 
 def ticket_details(ticket_id: int) -> None:
-    ticket = repo.ticket(ticket_id)
+    ticket = repo.ticket(ticket_id, current_user())
     if not ticket:
         st.error("Ticket not found.")
         return
@@ -122,19 +153,19 @@ def ticket_details(ticket_id: int) -> None:
     if ticket["customer_response"]:
         st.subheader("Customer response")
         st.info(ticket["customer_response"])
-    review = repo.reviewer(ticket_id)
+    review = repo.reviewer(ticket_id, current_user())
     if review:
         st.subheader("Reviewer verdict")
         st.write(review["verdict"])
         st.json(json.loads(review["checklist"]))
     st.subheader("Execution trace")
-    for execution in repo.executions(ticket_id):
-        st.markdown(f'<div class="trace"><b>{execution["agent_name"]}</b> · {execution["action"]}<br><small>{execution["completed_at"]}</small></div>', unsafe_allow_html=True)
+    for execution in repo.executions(ticket_id, current_user()):
+        st.info(f'{execution["agent_name"]} · {execution["action"]} · {execution["completed_at"]}')
         if execution["result"]:
             with st.expander("Output"):
                 st.json(json.loads(execution["result"]))
     st.subheader("Tool executions")
-    for tool in repo.tools(ticket_id):
+    for tool in repo.tools(ticket_id, current_user()):
         with st.expander(f"{tool['agent_name']} · {tool['tool_name']}"):
             st.json(json.loads(tool["output"]))
 
@@ -142,8 +173,8 @@ def ticket_details(ticket_id: int) -> None:
 def dashboard() -> None:
     st.title("RelayIt Desk")
     st.caption("Multi-agent customer-support triage")
-    stats = repo.stats()
-    tickets = repo.tickets()
+    stats = repo.stats(current_user())
+    tickets = repo.tickets(current_user())
     total = stats["total"]
     counts = stats["counts"]
     cols = st.columns(5)
@@ -195,7 +226,7 @@ def dashboard() -> None:
             st.info("Create a ticket to begin the live workflow.")
 
     st.subheader("Agent activity")
-    executions = [item for ticket in tickets for item in repo.executions(ticket["id"])]
+    executions = [item for ticket in tickets for item in repo.executions(ticket["id"], current_user())]
     if executions:
         frame = pd.DataFrame(executions)
         counts_frame = frame.groupby("agent_name").size().reset_index(name="executions").sort_values("executions", ascending=False)
@@ -205,7 +236,7 @@ def dashboard() -> None:
 
 def inbox() -> None:
     st.title("Ticket Inbox")
-    tickets = repo.tickets()
+    tickets = repo.tickets(current_user())
     query = st.text_input("Search tickets")
     status = st.selectbox("Filter status", ["All", "Resolved", "Escalated", "Awaiting Customer Information", "Processing"])
     filtered = [ticket for ticket in tickets if (status == "All" or ticket["status"] == status) and
@@ -273,7 +304,7 @@ def create_ticket() -> None:
 
 def escalations() -> None:
     st.title("Escalation Queue")
-    items = repo.escalations()
+    items = repo.escalations(current_user())
     if not items:
         st.success("No escalated tickets.")
     for item in items:
@@ -281,6 +312,9 @@ def escalations() -> None:
             st.write(f"**Customer:** {item['customer_name']} · **Specialist:** {item['specialist']}")
             st.write(f"**Original request:** {item['description']}")
             st.write(f"**Evidence:** {item['evidence']}")
+            if current_user().role not in {"admin", "reviewer"}:
+                st.warning("Only reviewers and administrators can send customer replies.")
+                continue
             with st.form(f"review-{item['ticket_id']}"):
                 reply = st.text_area(
                     "Reply to customer",
@@ -294,7 +328,7 @@ def escalations() -> None:
                     if not reply.strip():
                         st.error("Enter a customer-facing reply before saving.")
                         st.stop()
-                    repo.add_human_review(item["ticket_id"], note, decision, new_status, reply)
+                    repo.add_human_review(item["ticket_id"], note, decision, new_status, reply, current_user())
                     st.session_state["human_reply_saved"] = item["ticket_id"]
                     st.session_state["selected_ticket"] = item["ticket_id"]
                     st.session_state["page"] = "Ticket Details"
@@ -303,10 +337,10 @@ def escalations() -> None:
 
 def monitor() -> None:
     st.title("Agent Monitor")
-    tickets = repo.tickets()
+    tickets = repo.tickets(current_user())
     rows = []
     for ticket in tickets:
-        for execution in repo.executions(ticket["id"]):
+        for execution in repo.executions(ticket["id"], current_user()):
             rows.append(execution)
     frame = pd.DataFrame(rows)
     if frame.empty:
@@ -332,6 +366,11 @@ with st.sidebar:
     page = st.radio("Navigate", pages, index=page_index)
     st.session_state["page"] = page
     st.caption("Deterministic demonstration mode is clearly labelled and uses real SQLite-backed tools.")
+    st.caption(f"Signed in as `{current_user().username}` · role: `{current_user().role}`")
+    if st.button("Sign out"):
+        st.session_state.pop("authenticated_user", None)
+        st.session_state.pop("selected_ticket", None)
+        st.rerun()
 
 if page == "Dashboard":
     dashboard()

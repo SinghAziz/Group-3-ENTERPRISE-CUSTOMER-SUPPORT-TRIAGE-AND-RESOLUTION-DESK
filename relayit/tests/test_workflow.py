@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from relayit.database.repository import Repository
+from relayit.auth import User
 from relayit.models.schemas import TicketInput
 from relayit.orchestration.workflow import SupportWorkflow
 
@@ -43,7 +44,10 @@ class WorkflowTests(unittest.TestCase):
         first = self.run_ticket("Cannot log in", "I cannot sign in.", "demo.account@example.com")
         second = self.run_ticket("Still locked", "The account is still locked.", "demo.account@example.com")
         self.assertEqual(first.category, "account")
-        self.assertGreaterEqual(len(self.repository.history(self.repository.customer("Test Customer", "demo.account@example.com"))), 4)
+        self.assertGreaterEqual(len(self.repository.history(
+            self.repository.customer("Test Customer", "demo.account@example.com"),
+            User("analyst", "analyst"),
+        )), 4)
         self.assertEqual(second.category, "account")
 
     def test_human_review_saves_customer_reply(self):
@@ -55,12 +59,13 @@ class WorkflowTests(unittest.TestCase):
             "Awaiting customer details",
             "Awaiting Customer Information",
             reply,
+            User("reviewer", "reviewer"),
         )
-        ticket = self.repository.ticket(result.ticket_id)
+        ticket = self.repository.ticket(result.ticket_id, User("reviewer", "reviewer"))
         self.assertEqual(ticket["status"], "Awaiting Customer Information")
         self.assertEqual(ticket["customer_response"], reply)
         customer_id = self.repository.customer("Test Customer", "other@example.com")
-        history = self.repository.history(customer_id)
+        history = self.repository.history(customer_id, User("reviewer", "reviewer"))
         self.assertTrue(any(message["role"] == "assistant" and reply in message["content"] for message in history))
 
 

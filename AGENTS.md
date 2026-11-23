@@ -38,12 +38,15 @@ python -m unittest discover -s relayit/tests -p "test_*.py" -v
 For frontend or workflow changes, also start the app and verify it responds:
 
 ```bash
-python -m streamlit run app.py --server.headless true --server.address 0.0.0.0 --server.port 8587
+python -m streamlit run app.py --server.headless true --server.address 127.0.0.1 --server.port 8587
 curl -I http://127.0.0.1:8587/_stcore/health
 ```
 
 Stop or replace any temporary server before finishing. Do not leave a server
 bound to an old project process or an unrelated port.
+
+Authentication is mandatory. Never add default credentials. Generate hashes
+with `python -m relayit.auth` and configure `RELAYIT_AUTH_USERS_JSON` locally.
 
 ## Demo database
 

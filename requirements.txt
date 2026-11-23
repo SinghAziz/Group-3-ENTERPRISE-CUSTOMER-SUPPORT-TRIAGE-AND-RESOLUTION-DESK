@@ -1,6 +1,6 @@
-streamlit>=1.38,<2
-pandas>=2.2,<3
-plotly>=5.24,<6
-python-dotenv>=1.0,<2
-semantic-kernel>=1.15,<2
-jupyter>=1.0,<2
+streamlit==1.67.0
+pandas==2.3.3
+plotly==5.24.1
+python-dotenv==1.2.4
+semantic-kernel==1.47.0
+jupyter==1.1.1

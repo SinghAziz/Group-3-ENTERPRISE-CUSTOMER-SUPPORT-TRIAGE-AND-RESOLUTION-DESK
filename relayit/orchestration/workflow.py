@@ -6,6 +6,7 @@ from relayit.agents.classifier import ClassifierAgent
 from relayit.agents.escalation_router import EscalationRouter
 from relayit.agents.reviewer import ReviewerAgent
 from relayit.agents.technical_specialist import TechnicalSpecialist
+from relayit.auth import SYSTEM_USER
 from relayit.config import CONFIDENCE_THRESHOLD, MODEL_PROVIDER
 from relayit.database.repository import Repository
 from relayit.models.schemas import TicketInput, WorkflowResult
@@ -27,9 +28,9 @@ class SupportWorkflow:
 
     def run(self, ticket_input: TicketInput) -> WorkflowResult:
         customer_id = self.repository.customer(ticket_input.customer_name, ticket_input.customer_email)
-        history = self.repository.history(customer_id)
+        history = self.repository.history(customer_id, SYSTEM_USER)
         ticket_id = self.repository.create_ticket(customer_id, ticket_input.subject, ticket_input.description, ticket_input.priority)
-        ticket = self.repository.ticket(ticket_id)
+        ticket = self.repository.ticket(ticket_id, SYSTEM_USER)
         assert ticket is not None
         trace: list[dict] = []
 
@@ -84,4 +85,5 @@ class SupportWorkflow:
         self.repository.update_ticket(ticket_id, status=status, resolution=resolution, customer_response=response)
         self.repository.add_conversation(customer_id, ticket_id, ticket_input.subject, ticket_input.description, response)
         return WorkflowResult(ticket_id, status, category, confidence, str(classification["rationale"]), specialist.name,
-                              resolution, response, str(review["verdict"]), reason, evidence, trace, self.repository.tools(ticket_id))
+                              resolution, response, str(review["verdict"]), reason, evidence, trace,
+                              self.repository.tools(ticket_id, SYSTEM_USER))

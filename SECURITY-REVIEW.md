@@ -71,7 +71,10 @@ decision or customer reply.
 
 **Status**
 
-Unresolved. No remediation was implemented in this summary-only follow-up.
+Remediated in the application boundary and repository human-review mutation:
+configured PBKDF2-backed users are required to sign in, roles are checked
+server-side, and only reviewers/admins can send escalation replies. Full
+tenant-level isolation and production SSO remain deployment requirements.
 
 ## Other review results
 
@@ -114,9 +117,11 @@ implemented before activating hosted models.
 
 ### Dependencies
 
-Dependencies use version ranges and the repository did not contain a lockfile.
-This creates reproducibility and unpinned dependency risk. A package vulnerability
-scan should be run with `pip-audit` before production deployment.
+Direct dependencies are now pinned to exact versions in `requirements.txt`,
+which removes the previous open-ended direct-version risk. Transitive packages
+are not hash-locked, and `pip-audit` could not complete in this environment
+because its installation did not return within the execution window. Run it in
+CI before production deployment.
 
 ### Privacy and audit logging
 
@@ -136,7 +141,7 @@ retention/deletion controls before real PII is processed.
 
 ## Remaining risks
 
-- Production authentication and RBAC are not implemented.
+- Tenant-level isolation and SSO are not implemented.
 - Streamlit UI access controls are not a substitute for reverse-proxy or app
   identity controls.
 - Public binding must not be used before authentication.
@@ -146,5 +151,8 @@ retention/deletion controls before real PII is processed.
 
 ## Final readiness
 
-**Not ready for production use with real customer data.** The confirmed
-missing authorization issue is sufficient to prevent production readiness.
+The local demo now has a real configured-user authentication boundary, role
+checks, and repository-side authorization, but it is **not ready for production
+use with real customer data**
+without HTTPS, reverse-proxy protection, tenant isolation, retention controls,
+and security automation.

@@ -40,8 +40,10 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 cp .env.example .env
+python -m relayit.auth
+# Add the generated hash to RELAYIT_AUTH_USERS_JSON in .env.
 python -m unittest discover -s relayit/tests -p "test_*.py" -v
-python -m streamlit run app.py --server.headless true --server.address 0.0.0.0 --server.port 8501
+python -m streamlit run app.py --server.headless true --server.address 127.0.0.1 --server.port 8501
 ```
 
 Open <http://localhost:8501> after Streamlit reports that the server is ready.
@@ -63,8 +65,10 @@ py -3.12 -m venv .venv
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 Copy-Item .env.example .env
+python -m relayit.auth
+# Add the generated hash to RELAYIT_AUTH_USERS_JSON in .env.
 python -m unittest discover -s relayit/tests -p "test_*.py" -v
-python -m streamlit run app.py --server.headless true --server.address 0.0.0.0 --server.port 8501
+python -m streamlit run app.py --server.headless true --server.address 127.0.0.1 --server.port 8501
 ```
 
 Open <http://localhost:8501>.
@@ -94,16 +98,36 @@ OPENAI_CHAT_MODEL=gpt-4o-mini
 | `RELAYIT_MODEL_PROVIDER` | Agent execution mode | `deterministic` |
 | `OPENAI_API_KEY` | Optional hosted model credential | Empty |
 | `OPENAI_CHAT_MODEL` | Optional hosted model name | `gpt-4o-mini` |
+| `RELAYIT_AUTH_USERS_JSON` | PBKDF2 password hashes and roles | Required |
 
 Do not commit `.env` or a populated API key. The repository's `.gitignore` excludes
 runtime databases and secret environment files.
 
-## Run and demo
+### User and role configuration
 
-Use a new port if `8501` is busy:
+Authentication is required. Generate a password hash without storing the
+password in source control:
 
 ```bash
-python -m streamlit run app.py --server.headless true --server.address 0.0.0.0 --server.port 8587
+python -m relayit.auth
+```
+
+Set the generated value in `.env` as JSON. Use separate strong passwords for
+each user:
+
+```dotenv
+RELAYIT_AUTH_USERS_JSON={"reviewer":{"password_hash":"<generated-hash>","role":"reviewer"},"analyst":{"password_hash":"<generated-hash>","role":"analyst"}}
+```
+
+Roles are enforced server-side. `admin` and `reviewer` can send human
+escalation replies; `analyst` can inspect tickets and run workflows.
+
+## Run and demo
+
+Use a new loopback-only port if `8501` is busy:
+
+```bash
+python -m streamlit run app.py --server.headless true --server.address 127.0.0.1 --server.port 8587
 ```
 
 Then open <http://localhost:8587>.
@@ -189,6 +213,7 @@ before reporting completion.
 ## Known MVP boundaries
 
 The invoice, account, and knowledge-base records are local demonstration data.
-There is no authentication, payment integration, external CRM, or production
-multi-tenancy. Hosted LLM execution is optional and intentionally not claimed
-by deterministic runs.
+There is no payment integration, external CRM, or production multi-tenancy.
+Hosted LLM execution is optional and intentionally not claimed by deterministic
+runs. Production deployment requires an authenticated HTTPS reverse proxy,
+tenant isolation, secure secret storage, and a retention policy.

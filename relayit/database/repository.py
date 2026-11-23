@@ -4,6 +4,8 @@ import json
 import secrets
 from typing import Any
 
+from relayit.auth import User, require_role, require_user
+
 from .db import connect, init_db, json_value
 
 
@@ -73,7 +75,8 @@ class Repository:
                 [(conversation_id, "customer", f"{subject}\n{description}"), (conversation_id, "assistant", response)],
             )
 
-    def history(self, customer_id: int) -> list[dict[str, Any]]:
+    def history(self, customer_id: int, user: User | None = None) -> list[dict[str, Any]]:
+        require_role(require_user(user), "admin", "analyst", "reviewer")
         with connect(self.path) as db:
             rows = db.execute(
                 "SELECT m.role,m.content,m.created_at FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE c.customer_id=? ORDER BY m.created_at",
@@ -81,7 +84,8 @@ class Repository:
             ).fetchall()
             return [dict(row) for row in rows]
 
-    def ticket(self, ticket_id: int) -> dict[str, Any] | None:
+    def ticket(self, ticket_id: int, user: User | None = None) -> dict[str, Any] | None:
+        require_role(require_user(user), "admin", "analyst", "reviewer")
         with connect(self.path) as db:
             row = db.execute(
                 "SELECT t.*,c.name customer_name,c.email customer_email,c.reference customer_reference FROM tickets t JOIN customers c ON c.id=t.customer_id WHERE t.id=?",
@@ -89,21 +93,25 @@ class Repository:
             ).fetchone()
             return dict(row) if row else None
 
-    def tickets(self) -> list[dict[str, Any]]:
+    def tickets(self, user: User | None = None) -> list[dict[str, Any]]:
+        require_role(require_user(user), "admin", "analyst", "reviewer")
         with connect(self.path) as db:
             return [dict(row) for row in db.execute(
                 "SELECT t.*,c.name customer_name,c.email customer_email FROM tickets t JOIN customers c ON c.id=t.customer_id ORDER BY t.created_at DESC"
             ).fetchall()]
 
-    def executions(self, ticket_id: int) -> list[dict[str, Any]]:
+    def executions(self, ticket_id: int, user: User | None = None) -> list[dict[str, Any]]:
+        require_role(require_user(user), "admin", "analyst", "reviewer")
         with connect(self.path) as db:
             return [dict(row) for row in db.execute("SELECT * FROM agent_executions WHERE ticket_id=? ORDER BY id", (ticket_id,)).fetchall()]
 
-    def tools(self, ticket_id: int) -> list[dict[str, Any]]:
+    def tools(self, ticket_id: int, user: User | None = None) -> list[dict[str, Any]]:
+        require_role(require_user(user), "admin", "analyst", "reviewer")
         with connect(self.path) as db:
             return [dict(row) for row in db.execute("SELECT * FROM tool_executions WHERE ticket_id=? ORDER BY id", (ticket_id,)).fetchall()]
 
-    def reviewer(self, ticket_id: int) -> dict[str, Any] | None:
+    def reviewer(self, ticket_id: int, user: User | None = None) -> dict[str, Any] | None:
+        require_role(require_user(user), "admin", "analyst", "reviewer")
         with connect(self.path) as db:
             row = db.execute("SELECT * FROM reviewer_results WHERE ticket_id=? ORDER BY id DESC LIMIT 1", (ticket_id,)).fetchone()
             return dict(row) if row else None
@@ -118,13 +126,16 @@ class Repository:
             db.execute("INSERT OR REPLACE INTO escalations(ticket_id,reason,evidence) VALUES (?,?,?)",
                        (ticket_id, reason, json_value(evidence)))
 
-    def escalations(self) -> list[dict[str, Any]]:
+    def escalations(self, user: User | None = None) -> list[dict[str, Any]]:
+        require_role(require_user(user), "admin", "analyst", "reviewer")
         with connect(self.path) as db:
             return [dict(row) for row in db.execute(
                 "SELECT e.*,t.subject,t.description,t.priority,t.specialist,c.name customer_name FROM escalations e JOIN tickets t ON t.id=e.ticket_id JOIN customers c ON c.id=t.customer_id ORDER BY e.created_at DESC"
             ).fetchall()]
 
-    def add_human_review(self, ticket_id: int, note: str, decision: str, status: str, customer_reply: str) -> None:
+    def add_human_review(self, ticket_id: int, note: str, decision: str, status: str, customer_reply: str,
+                         user: User | None = None) -> None:
+        require_role(require_user(user), "admin", "reviewer")
         customer_reply = customer_reply.strip()
         if not customer_reply:
             raise ValueError("A customer-facing reply is required.")
@@ -149,8 +160,8 @@ class Repository:
                 (ticket_id, "Human Support", "Customer reply", customer_reply),
             )
 
-    def stats(self) -> dict[str, Any]:
-        tickets = self.tickets()
+    def stats(self, user: User | None = None) -> dict[str, Any]:
+        tickets = self.tickets(user)
         counts = {}
         for ticket in tickets:
             counts[ticket["status"]] = counts.get(ticket["status"], 0) + 1
