@@ -121,14 +121,22 @@ class Repository:
     def escalations(self) -> list[dict[str, Any]]:
         with connect(self.path) as db:
             return [dict(row) for row in db.execute(
-                "SELECT e.*,t.subject,t.priority,t.specialist,c.name customer_name FROM escalations e JOIN tickets t ON t.id=e.ticket_id JOIN customers c ON c.id=t.customer_id ORDER BY e.created_at DESC"
+                "SELECT e.*,t.subject,t.description,t.priority,t.specialist,c.name customer_name FROM escalations e JOIN tickets t ON t.id=e.ticket_id JOIN customers c ON c.id=t.customer_id ORDER BY e.created_at DESC"
             ).fetchall()]
 
-    def add_human_review(self, ticket_id: int, note: str, decision: str, status: str) -> None:
+    def add_human_review(self, ticket_id: int, note: str, decision: str, status: str, customer_reply: str) -> None:
+        customer_reply = customer_reply.strip()
         with connect(self.path) as db:
             db.execute("UPDATE escalations SET internal_note=?,human_decision=?,resolved_at=CURRENT_TIMESTAMP WHERE ticket_id=?",
                        (note, decision, ticket_id))
-            db.execute("UPDATE tickets SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?", (status, ticket_id))
+            db.execute(
+                "UPDATE tickets SET status=?,resolution=?,customer_response=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                (status, decision or "Reviewed by a human support representative", customer_reply, ticket_id),
+            )
+            db.execute(
+                "INSERT INTO audit_logs(ticket_id,agent_name,action,result) VALUES (?,?,?,?)",
+                (ticket_id, "Human Support", "Customer reply", customer_reply),
+            )
 
     def stats(self) -> dict[str, Any]:
         tickets = self.tickets()

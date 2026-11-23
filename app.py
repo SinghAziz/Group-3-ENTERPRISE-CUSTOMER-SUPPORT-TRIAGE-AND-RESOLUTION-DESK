@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 
 import pandas as pd
@@ -11,7 +12,16 @@ from relayit.database.repository import Repository
 from relayit.models.schemas import TicketInput
 from relayit.orchestration.workflow import SupportWorkflow
 
-st.set_page_config(page_title="RelayIt Desk", page_icon="✦", layout="wide")
+st.set_page_config(
+    page_title="RelayIt",
+    page_icon="assets/relayit-favicon.png",
+    layout="wide",
+)
+
+def logo_data_uri() -> str:
+    with open("assets/relayit-logo.png", "rb") as logo_file:
+        encoded = base64.b64encode(logo_file.read()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700&display=swap');
@@ -21,6 +31,9 @@ html, body, [class*="css"] { font-family:'DM Sans', sans-serif; }
 .block-container { max-width:1320px; padding-top:1.8rem; padding-bottom:3rem; }
 [data-testid="stSidebar"] { background:#17212b; border-right:0; }
 [data-testid="stSidebar"] * { color:#f7f8f5; }
+[data-testid="stSidebar"] .brand-lockup { display:flex; align-items:center; gap:10px; margin:4px 0 18px; }
+[data-testid="stSidebar"] .brand-lockup img { width:38px; height:38px; object-fit:contain; }
+[data-testid="stSidebar"] .brand-lockup span { font-family:'Manrope', sans-serif; font-size:1.32rem; font-weight:700; letter-spacing:-.02em; }
 [data-testid="stSidebar"] [data-testid="stRadio"] label { padding:.72rem .8rem; border-radius:7px; }
 [data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) { background:#26343f; }
 h1, h2, h3 { font-family:'Manrope', sans-serif; color:var(--ink); letter-spacing:0; }
@@ -263,13 +276,22 @@ def escalations() -> None:
     for item in items:
         with st.expander(f"#{item['ticket_id']} · {item['subject']} · {item['reason']}"):
             st.write(f"**Customer:** {item['customer_name']} · **Specialist:** {item['specialist']}")
+            st.write(f"**Original request:** {item['description']}")
             st.write(f"**Evidence:** {item['evidence']}")
             with st.form(f"review-{item['ticket_id']}"):
-                note = st.text_area("Internal note")
-                decision = st.text_input("Human decision")
+                reply = st.text_area(
+                    "Reply to customer",
+                    height=150,
+                    placeholder="Write the response the customer should receive...",
+                )
+                decision = st.text_input("Human decision summary", placeholder="e.g. Refund approved")
+                note = st.text_area("Internal note", placeholder="Optional notes for the support team")
                 new_status = st.selectbox("Update status", ["Resolved", "Awaiting Customer Information", "Escalated"])
-                if st.form_submit_button("Save human review"):
-                    repo.add_human_review(item["ticket_id"], note, decision, new_status)
+                if st.form_submit_button("Save and reply", type="primary", width="stretch"):
+                    if not reply.strip():
+                        st.error("Enter a customer-facing reply before saving.")
+                        st.stop()
+                    repo.add_human_review(item["ticket_id"], note, decision, new_status, reply)
                     st.rerun()
 
 
@@ -289,7 +311,13 @@ def monitor() -> None:
 
 
 with st.sidebar:
-    st.markdown("## ✦ RelayIt Desk")
+    st.markdown(
+        '<div class="brand-lockup">'
+        f'<img src="{logo_data_uri()}" alt="RelayIt">'
+        '<span>RelayIt</span>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
     pages = ["Dashboard", "Ticket Inbox", "Create Ticket", "Escalation Queue", "Agent Monitor"]
     if st.session_state.get("selected_ticket"):
         pages.append("Ticket Details")

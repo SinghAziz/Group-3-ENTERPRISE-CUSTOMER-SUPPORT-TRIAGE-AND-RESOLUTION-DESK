@@ -46,6 +46,20 @@ class WorkflowTests(unittest.TestCase):
         self.assertGreaterEqual(len(self.repository.history(self.repository.customer("Test Customer", "demo.account@example.com"))), 4)
         self.assertEqual(second.category, "account")
 
+    def test_human_review_saves_customer_reply(self):
+        result = self.run_ticket("Question", "I need help with something unusual.", "other@example.com")
+        reply = "A support representative reviewed this and needs more details."
+        self.repository.add_human_review(
+            result.ticket_id,
+            "Requested account reference",
+            "Awaiting customer details",
+            "Awaiting Customer Information",
+            reply,
+        )
+        ticket = self.repository.ticket(result.ticket_id)
+        self.assertEqual(ticket["status"], "Awaiting Customer Information")
+        self.assertEqual(ticket["customer_response"], reply)
+
 
 if __name__ == "__main__":
     unittest.main()
